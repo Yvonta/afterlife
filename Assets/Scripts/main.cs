@@ -85,30 +85,6 @@ public class Main : MonoBehaviour
                 {
                     Debug.LogError("Failed to load GLB bytes via GltfImport.");
                 }
-            }
-
-// Instantiate base avatar using GLTFast's generic Load method for byte arrays
-            if (avatar.AvatarGlbData != null)
-            {
-                Debug.Log("Instantiating avatar in the scene using GLTFast...");
-
-                GameObject avatarObject = new GameObject($"DonkeyAvatar_{avatar.AvatarId}");
-                var gltfImport = new GltfImport();
-                
-                bool success = await gltfImport.Load(avatar.AvatarGlbData);
-                
-                if (success)
-                {
-                    success = await gltfImport.InstantiateMainSceneAsync(avatarObject.transform);
-                    if (!success)
-                    {
-                        Debug.LogError("Failed to instantiate GLTFast main scene.");
-                    }
-                }
-                else
-                {
-                    Debug.LogError("Failed to load GLB bytes via GltfImport.");
-                }
 
                 // Render all fitted clothing items
                 foreach (var clothingItem in avatar.ClothingItems)
