@@ -60,9 +60,47 @@ public class Main : MonoBehaviour
             }
         }
 
-        // Enable login at start, hide register
         if (uiLogin != null) uiLogin.SetVisible(true);
         if (uiRegister != null) uiRegister.SetVisible(false);
+    }
+
+    private async void Start()
+    {  	 
+	if (uiLogin != null)
+        {
+            uiLogin.SetVisible(false);
+            uiLogin.SetInteractable(false);
+            uiLogin.SetStatusMessage("Checking existing session...");
+        }
+
+        DonkeySession session = new DonkeySession(jsonRpcUrl);
+
+        if (!string.IsNullOrEmpty(session.StoredCookie))
+        {
+            try
+            {
+                Debug.Log("Validating existing session...");
+                await session.IsLoggedInAsync();
+                Debug.Log("Session is valid! Running avatar workflow.");
+
+                if (uiLogin != null) uiLogin.SetVisible(false);
+
+                await RunAvatarWorkflow(session);
+                return;
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"Stored session is invalid or expired: {ex.Message}. Requiring manual login.");
+                session.ClearSession();
+            }
+        }
+
+        if (uiLogin != null)
+        {
+            uiLogin.SetVisible(true);
+            uiLogin.SetInteractable(true);
+            uiLogin.SetStatusMessage("Please log in.");
+        }
     }
 
     private void OnEnable()
@@ -109,8 +147,7 @@ public class Main : MonoBehaviour
 
     private void HandleRegisterSubmitted(string email, string password, string name, string genderInput, string ageInput)
     {
-        Debug.Log($"Register submitted for: {email}, Name: {name}, Gender: {genderInput}, Age: {ageInput}");
-        // TODO: Implement your registration JSON-RPC/API call here
+        Debug.Log($"Register submitted for: {email}, Name: {name}");
     }
 
     private async void HandleLoginSubmitted(string email, string password)
@@ -127,7 +164,7 @@ public class Main : MonoBehaviour
         {
             Debug.Log("Logging in via JSON-RPC...");
             await session.LoginAsync(email, password);
-            Debug.Log("Login successful! Session cookie stored.");
+            Debug.Log("Login successful! Session stored.");
 
             uiLogin.SetVisible(false);
 
@@ -147,48 +184,47 @@ public class Main : MonoBehaviour
 
     private async Task RunAvatarWorkflow(DonkeySession session)
     {
-        _ = avatarGenUrl;
-        _ = clothingUrl;
-        _ = hairUrl;
-        _ = clothingName;
-        _ = hairName;
-        _ = gender;
-        _ = age;
-        _ = weight;
-
         DonkeyAvatar avatar = new DonkeyAvatar(avatarGenUrl, clothingUrl, hairUrl, session);
 
-        string fullPath = Path.Combine(Application.streamingAssetsPath, faceImagePath);
-        if (!File.Exists(fullPath))
+        // Try loading everything from cache first
+        if (avatar.TryLoadFromCache(clothingName, hairName, gender, age, weight))
         {
-            fullPath = faceImagePath;
+            Debug.Log("[Workflow] Loaded complete avatar setup from cache. Skipping network calls.");
         }
-
-        if (!File.Exists(fullPath))
+        else
         {
-            string errorMsg = $"Face image file not found at: {fullPath}";
-            Debug.LogError(errorMsg);
-            uiLogin.SetVisible(true);
-            if (uiLogin != null)
+            string fullPath = Path.Combine(Application.streamingAssetsPath, faceImagePath);
+            if (!File.Exists(fullPath))
             {
-                uiLogin.SetStatusMessage(errorMsg);
-                uiLogin.SetInteractable(true);
+                fullPath = faceImagePath;
             }
-            return;
+
+            if (!File.Exists(fullPath))
+            {
+                string errorMsg = $"Face image file not found at: {fullPath}";
+                Debug.LogError(errorMsg);
+                if (uiLogin != null)
+                {
+                    uiLogin.SetVisible(true);
+                    uiLogin.SetStatusMessage(errorMsg);
+                    uiLogin.SetInteractable(true);
+                }
+                return;
+            }
+
+            byte[] imageBytes = File.ReadAllBytes(fullPath);
+
+            Debug.Log("Generating avatar via proxy...");
+            await avatar.GenerateAvatarAsync(imageBytes, gender, age, weight);
+            
+            Debug.Log($"Fitting clothing: {clothingName}...");
+            await avatar.FitClothingAsync(clothingName);
+
+            Debug.Log($"Fitting hair: {hairName}...");
+            await avatar.FitHairAsync(hairName);
         }
 
-        byte[] imageBytes = File.ReadAllBytes(fullPath);
-
-        Debug.Log("Generating avatar via proxy...");
-        await avatar.GenerateAvatarAsync(imageBytes, gender, age, weight);
-        Debug.Log($"Avatar generated successfully! Avatar ID: {avatar.AvatarId}");
-
-        Debug.Log($"Fitting clothing: {clothingName}...");
-        await avatar.FitClothingAsync(clothingName);
-
-        Debug.Log($"Fitting hair: {hairName}...");
-        await avatar.FitHairAsync(hairName);
-
+        // Instantiation with GLTFast remains identical...
         if (avatar.AvatarGlbData != null)
         {
             Debug.Log("Instantiating avatar in the scene using GLTFast...");
@@ -196,17 +232,11 @@ public class Main : MonoBehaviour
             Quaternion spawnRotation = Quaternion.Euler(0f, 180f, 0f);
             GameObject avatarObject = new GameObject($"DonkeyAvatar_{avatar.AvatarId}");
             avatarObject.transform.rotation = spawnRotation;
+            
             var gltfImport = new GltfImport();
-            
-            bool success = await gltfImport.Load(avatar.AvatarGlbData);
-            
-            if (success)
+            if (await gltfImport.Load(avatar.AvatarGlbData))
             {
-                success = await gltfImport.InstantiateMainSceneAsync(avatarObject.transform);
-                if (!success)
-                {
-                    Debug.LogError("Failed to instantiate GLTFast main scene.");
-                }
+                await gltfImport.InstantiateMainSceneAsync(avatarObject.transform);
             }
 
             foreach (var clothingItem in avatar.ClothingItems)

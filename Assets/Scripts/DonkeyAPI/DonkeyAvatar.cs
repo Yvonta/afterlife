@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -32,6 +33,43 @@ namespace Donkey
             _session = session;
         }
 
+        /// <summary>
+        /// Tries to load the avatar, clothing, and hair from local persistent storage cache.
+        /// Returns true if all required cached files are successfully loaded.
+        /// </summary>
+        public bool TryLoadFromCache(string clothingName, string hairName, float gender, float age, float weight)
+        {
+            string avatarCachePath = Path.Combine(Application.persistentDataPath, $"avatar_body_{gender}_{age}_{weight}.glb");
+            string clothingCachePath = Path.Combine(Application.persistentDataPath, $"clothing_{clothingName}.glb");
+            string hairCachePath = Path.Combine(Application.persistentDataPath, $"hair_{hairName}.glb");
+
+            if (File.Exists(avatarCachePath) && File.Exists(clothingCachePath) && File.Exists(hairCachePath))
+            {
+                try
+                {
+                    AvatarGlbData = File.ReadAllBytes(avatarCachePath);
+                    
+                    byte[] clothingData = File.ReadAllBytes(clothingCachePath);
+                    ClothingItems.Clear();
+                    ClothingItems.Add(new ClothingItem { Name = clothingName, GlbData = clothingData });
+
+                    HairGlbData = File.ReadAllBytes(hairCachePath);
+                    
+                    // Assign a generic or cached identifier
+                    AvatarId = "cached_avatar";
+
+                    Debug.Log("[DonkeyAvatar] Successfully loaded avatar, clothing, and hair from local cache.");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[DonkeyAvatar] Failed to read cached files, falling back to network: {ex.Message}");
+                }
+            }
+
+            return false;
+        }
+
         public async Task GenerateAvatarAsync(byte[] imageBytes, float gender = 0.0f, float age = 0.8f, float weight = 0.2f)
         {
             List<IMultipartFormSection> formData = new List<IMultipartFormSection>
@@ -46,6 +84,7 @@ namespace Donkey
             {
                 if (!string.IsNullOrEmpty(_session.StoredCookie))
                 {
+                    Debug.Log($"[Avatar] Sending Cookie: {_session.StoredCookie}");
                     www.SetRequestHeader("Cookie", _session.StoredCookie);
                 }
 
@@ -68,6 +107,17 @@ namespace Donkey
                 {
                     throw new Exception("ERROR: No X-Avatar-Id header found in response.");
                 }
+
+                // Save avatar body to cache
+                try
+                {
+                    string avatarCachePath = Path.Combine(Application.persistentDataPath, $"avatar_body_{gender}_{age}_{weight}.glb");
+                    File.WriteAllBytes(avatarCachePath, AvatarGlbData);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[DonkeyAvatar] Failed to cache avatar body: {ex.Message}");
+                }
             }
         }
 
@@ -88,6 +138,7 @@ namespace Donkey
             {
                 if (!string.IsNullOrEmpty(_session.StoredCookie))
                 {
+                    Debug.Log($"[Clothing] Sending Cookie: {_session.StoredCookie}");
                     www.SetRequestHeader("Cookie", _session.StoredCookie);
                 }
 
@@ -104,8 +155,24 @@ namespace Donkey
                 }
 
                 byte[] clothingData = www.downloadHandler.data;
+
                 ClothingItems.RemoveAll(c => c.Name == clothingName);
-                ClothingItems.Add(new ClothingItem { Name = clothingName, GlbData = clothingData });
+                ClothingItems.Add(new ClothingItem
+                {
+                    Name = clothingName,
+                    GlbData = clothingData
+                });
+
+                // Save clothing to cache
+                try
+                {
+                    string clothingCachePath = Path.Combine(Application.persistentDataPath, $"clothing_{clothingName}.glb");
+                    File.WriteAllBytes(clothingCachePath, clothingData);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[DonkeyAvatar] Failed to cache clothing: {ex.Message}");
+                }
             }
         }
 
@@ -116,7 +183,6 @@ namespace Donkey
                 throw new Exception("Avatar must be generated before fitting hair.");
             }
 
-            // clothing.php validates against clothes_name, so pass the hair name into clothes_name
             List<IMultipartFormSection> formData = new List<IMultipartFormSection>
             {
                 new MultipartFormDataSection("avatar_id", AvatarId),
@@ -127,6 +193,7 @@ namespace Donkey
             {
                 if (!string.IsNullOrEmpty(_session.StoredCookie))
                 {
+                    Debug.Log($"[Hair] Sending Cookie: {_session.StoredCookie}");
                     www.SetRequestHeader("Cookie", _session.StoredCookie);
                 }
 
@@ -143,6 +210,17 @@ namespace Donkey
                 }
 
                 HairGlbData = www.downloadHandler.data;
+
+                // Save hair to cache
+                try
+                {
+                    string hairCachePath = Path.Combine(Application.persistentDataPath, $"hair_{hairName}.glb");
+                    File.WriteAllBytes(hairCachePath, HairGlbData);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[DonkeyAvatar] Failed to cache hair: {ex.Message}");
+                }
             }
         }
     }
