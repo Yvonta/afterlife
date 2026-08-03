@@ -145,9 +145,21 @@ public class Main : MonoBehaviour
         if (uiLogin != null) uiLogin.SetVisible(true);
     }
 
-    private void HandleRegisterSubmitted(string email, string password, string name, string genderInput, string ageInput)
+    private async void HandleRegisterSubmitted(string email, string password, string name, string genderInput, string ageInput)
     {
         Debug.Log($"Register submitted for: {email}, Name: {name}");
+
+	 DonkeySession session = new DonkeySession(jsonRpcUrl);
+
+	try
+	{
+		await session.RegisterAsync(email, password, name, genderInput, ageInput);
+		uiRegister.SetVisible(false);
+	}
+	catch (System.Exception ex)
+        {
+
+	}
     }
 
     private async void HandleLoginSubmitted(string email, string password)

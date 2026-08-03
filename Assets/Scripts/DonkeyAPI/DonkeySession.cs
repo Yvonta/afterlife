@@ -43,7 +43,7 @@ namespace Donkey
     public class DonkeySession
     {
 	private readonly string _serverUrl;
-        private int _idCounter = 0;
+        public static int _idCounter = 0;
         private string _storedSessionId;
 	private DonkeyJsonRpcResponse _response;	
 
@@ -57,7 +57,7 @@ namespace Donkey
 
         public async Task<string> LoginAsync(string email, string password)
         {
-            int requestId = ++_idCounter;
+            int requestId = ++DonkeySession._idCounter;
             string jsonBody = BuildLoginPayload(email, password, requestId);
 
             using (UnityWebRequest www = new UnityWebRequest(_serverUrl, "POST"))
@@ -144,11 +144,6 @@ namespace Donkey
 
         private string BuildLoginPayload(string email, string password, int id)
         {
-            // Always include email and password for login, plus sessionid if available
-            if (!string.IsNullOrEmpty(_storedSessionId))
-            {
-                return $"{{\"jsonrpc\":\"2.0\",\"method\":\"login\",\"params\":{{\"email\":\"{email}\",\"password\":\"{password}\",\"sessionid\":\"{_storedSessionId}\"}},\"id\":{id}}}";
-            }
             return $"{{\"jsonrpc\":\"2.0\",\"method\":\"login\",\"params\":{{\"email\":\"{email}\",\"password\":\"{password}\"}},\"id\":{id}}}";
         }
 
@@ -187,6 +182,41 @@ namespace Donkey
 	    }
 	}
 
+		public async Task<string> RegisterAsync(string email, string password, string name, string gender, string age)
+		{
+		    int requestId = ++DonkeySession._idCounter;
+		    string jsonBody = BuildRegidterPayload(email, password, name, gender, age, requestId);
+
+		    using (UnityWebRequest www = new UnityWebRequest(_serverUrl, "POST"))
+		    {
+		        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
+		        www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+		        www.downloadHandler = new DownloadHandlerBuffer();
+		        www.SetRequestHeader("Content-Type", "application/json");
+
+		        var operation = www.SendWebRequest();
+		        while (!operation.isDone) await Task.Yield();
+
+		        if (www.result != UnityWebRequest.Result.Success)
+		        {
+		            throw new Exception($"Register Network Error: {www.error} | Response: {www.downloadHandler.text}");
+		        }
+
+		        string responseString = www.downloadHandler.text;
+		        Debug.Log($"[Register] Server Response: {responseString}");
+			string jsonResponse = ParseResponse(responseString);
+			_response = JsonUtility.FromJson<DonkeyJsonRpcResponse>(jsonResponse);
+			DonkeySessionSave.SaveSession(_response.result.data.sessionid);
+			return jsonResponse;	
+		    }
+		}
+		
+		private string BuildRegidterPayload(string email, string password, string name, string gender, string age, int id)
+		{
+		    // Always include email and password for login, plus sessionid if available
+		    return $"{{\"jsonrpc\":\"2.0\",\"method\":\"register\",\"params\":{{\"email\":\"{email}\",\"password\":\"{password}\",\"name\":\"{name}\",\"gender\":\"{gender}\",\"age\":\"{age}\"}},\"id\":{id}}}";
+		}
+ 
         private void LoadSessionFromDisk()
         {
 	    _storedSessionId = DonkeySessionSave.LoadSession();	
@@ -200,7 +230,7 @@ namespace Donkey
 	    }
         }
 
-        private string ParseResponse(string jsonResponse)
+        private static string ParseResponse(string jsonResponse)
         {
             if (jsonResponse.Contains("\"error\"") && !jsonResponse.Contains("\"error\":null"))
             {

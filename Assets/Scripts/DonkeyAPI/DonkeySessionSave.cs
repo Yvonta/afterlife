@@ -19,7 +19,7 @@ public static class DonkeySessionSave
         SessionData data = new SessionData { sessionId = sessionId };
         string json = JsonUtility.ToJson(data);
 	File.WriteAllText(FilePath, json); // Fixed from File.Write.AllText
-	Debug.Log("Saving session to: " + FilePath);
+	Debug.Log("Saved session to: " + FilePath);
     }
 
     public static string LoadSession()
@@ -28,7 +28,8 @@ public static class DonkeySessionSave
         {
             string json = File.ReadAllText(FilePath);
             SessionData data = JsonUtility.FromJson<SessionData>(json);
-            return data?.sessionId;
+            Debug.Log("Loeded session from: " + FilePath);
+	    return data?.sessionId;
         }
         return null;
     }
