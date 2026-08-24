@@ -13,6 +13,8 @@ namespace Donkey
 
         private AudioSource audioSource;
         private Queue<AudioClip> playQueue = new Queue<AudioClip>();
+        private Queue<string> subtitleQueue = new Queue<string>();
+
 
         // Fix: Use explicit backing field instead of auto-property setter
         private bool isDownloading = false;
@@ -63,7 +65,7 @@ namespace Donkey
 
             List<IMultipartFormSection> formData = new List<IMultipartFormSection>
             {
-                new MultipartFormDataSection("text", text.Replace(".", "").Replace("!", "").Replace("?", "")),
+                new MultipartFormDataSection("text", text.Replace(".", "").Replace("?", "")),
                 new MultipartFormDataSection("format", "mp3"),
                 new MultipartFormDataSection("language_id", language),           
                 new MultipartFormFileSection("voice_file", fileBytes, "voice.mp3", "audio/mpeg")
@@ -89,13 +91,12 @@ namespace Donkey
                     if (clip != null && clip.samples > 0)
                     {
                         playQueue.Enqueue(clip);
+                        subtitleQueue.Enqueue(text);
                     }
                     else
                     {
                         Debug.LogError($"[DonkeyTTS] Received invalid audio clip for: '{text}'");
                     }
-
-                    subtitleText = text;
                 }
                 else
                 {
@@ -111,9 +112,10 @@ namespace Donkey
             if (playQueue.Count == 0) return 0f;
 
             AudioClip clip = playQueue.Dequeue();
+            string text = subtitleQueue.Dequeue();
             audioSource.clip = clip;
             audioSource.Play();
-            SubtitleManager.Instance.DisplaySubtitle(subtitleText);
+            SubtitleManager.Instance.DisplaySubtitle(text);
 
             return clip.length;
         }
@@ -123,6 +125,7 @@ namespace Donkey
             StopAllCoroutines();
             if (audioSource != null) audioSource.Stop();
             playQueue.Clear();
+            subtitleQueue.Clear();
             isDownloading = false;
         }
     }

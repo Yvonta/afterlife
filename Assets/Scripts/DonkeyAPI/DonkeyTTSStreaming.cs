@@ -108,7 +108,7 @@ namespace Donkey
         // Deze coroutine vult de buffer achter elkaar aan tot maximaal 2 zinnen
         private IEnumerator BufferSentencesRoutine()
         {
-            const int MAX_BUFFER_SIZE = 2;
+            const int MAX_BUFFER_SIZE = 3;
 
             while (true)
             {
