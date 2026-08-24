@@ -9,7 +9,7 @@ namespace Donkey
     public class DonkeyTTS : MonoBehaviour
     {
         [SerializeField] private string serverUrl = "https://ultireal.com/appapi/v2/tts.php";
-        [SerializeField] private string voiceFilePath = "/Users/dirkjan/dirkjan.mp3";
+        [SerializeField] private string voiceFilePath = "Assets/Voices/yvonta.mp3";
 
         private AudioSource audioSource;
         private Queue<AudioClip> playQueue = new Queue<AudioClip>();
