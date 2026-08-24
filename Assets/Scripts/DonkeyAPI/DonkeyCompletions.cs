@@ -1,19 +1,18 @@
 using System;
-using System.Collections;
 using System.Text;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
 
 namespace Donkey
 {
-    public class DonkeyCompletions : MonoBehaviour
+    // Removed : MonoBehaviour inheritance
+    public class DonkeyCompletions
     {
-        private string _apiEndpoint;
-        private string _statusEndpoint;
-        private float _pollInterval;
-        private int _maxPollAttempts;
-
-
+        private readonly string _apiEndpoint;
+        private readonly string _statusEndpoint;
+        private readonly float _pollInterval;
+        private readonly int _maxPollAttempts;
         private readonly DonkeySession _session;
 
         #region Data Structures (OpenAI Compatible)
@@ -28,7 +27,7 @@ namespace Donkey
         [Serializable]
         public class ChatRequest
         {
-            public string model = "gpt-4o";
+            public string model = "gemma2:2b";
             public ChatMessage[] messages;
             public bool stream = false;
         }
@@ -62,19 +61,19 @@ namespace Donkey
         }
 
         /// <summary>
-        /// Sends a prompt to the queue endpoint and starts polling for completion.
+        /// Sends a prompt to the queue endpoint and polls for completion asynchronously.
         /// </summary>
-        public void SendPrompt(string userPrompt, Action<string> onSuccess, Action<string> onError)
+        public async void SendPrompt(string userPrompt, Action<string> onSuccess, Action<string> onError)
         {
-            StartCoroutine(SendRequestRoutine(userPrompt, onSuccess, onError));
+            await SendRequestAsync(userPrompt, onSuccess, onError);
         }
 
-        private IEnumerator SendRequestRoutine(string userPrompt, Action<string> onSuccess, Action<string> onError)
+        private async Task SendRequestAsync(string userPrompt, Action<string> onSuccess, Action<string> onError)
         {
             // 1. Build Payload
             ChatRequest requestPayload = new ChatRequest
             {
-                model = "gpt-4o",
+                model = "gemma2:2b",
                 messages = new ChatMessage[]
                 {
                     new ChatMessage { role = "user", content = userPrompt }
@@ -91,59 +90,66 @@ namespace Donkey
                 request.downloadHandler = new DownloadHandlerBuffer();
                 request.SetRequestHeader("Content-Type", "application/json");
 
-                if (!string.IsNullOrEmpty(_session.StoredCookie))
+                if (_session != null && !string.IsNullOrEmpty(_session.StoredCookie))
                 {
                     Debug.Log($"[Completions] Sending Cookie: {_session.StoredCookie}");
                     request.SetRequestHeader("Cookie", _session.StoredCookie);
                 }
 
-                yield return request.SendWebRequest();
+                // Send request asynchronously without Coroutines
+                var operation = request.SendWebRequest();
+                while (!operation.isDone)
+                {
+                    await Task.Yield();
+                }
 
                 // 3. Handle Initial Response
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    onError?.Invoke($"Request Error ({request.responseCode}): {request.error}\n{request.downloadHandler.text}");
-                    yield break;
+                    onError?.Invoke($"Request Error ({request.responseCode}): {request.error}\n{request.downloadHandler?.text}");
+                    return;
                 }
 
                 QueueResponse initialResponse = JsonUtility.FromJson<QueueResponse>(request.downloadHandler.text);
                 
                 Debug.Log($"[ChatGPTQueue] Successfully queued with Queue ID: {initialResponse.queue_id}");
 
-                // 4. Poll for Completion (Optional, based on your implementation)
-                if (initialResponse.queue_id > 0)
+                // 4. Poll for Completion
+                if (initialResponse != null && initialResponse.queue_id > 0)
                 {
-                    StartCoroutine(PollJobStatusRoutine(initialResponse.queue_id, onSuccess, onError));
+                    await PollJobStatusAsync(initialResponse.queue_id, onSuccess, onError);
                 }
                 else
                 {
-                    // If the PHP endpoint completed synchronously, return immediately
-                    string content = initialResponse.choices?[0]?.message?.content ?? "No content returned";
+                    string content = initialResponse?.choices?[0]?.message?.content ?? "No content returned";
                     onSuccess?.Invoke(content);
                 }
             }
         }
 
-        private IEnumerator PollJobStatusRoutine(int queueId, Action<string> onSuccess, Action<string> onError)
+        private async Task PollJobStatusAsync(int queueId, Action<string> onSuccess, Action<string> onError)
         {
             int attempts = 0;
 
             while (attempts < _maxPollAttempts)
             {
-                yield return new WaitForSeconds(_pollInterval);
+                await Task.Delay((int)(_pollInterval * 1000));
                 attempts++;
 
                 string pollUrl = $"{_statusEndpoint}?id={queueId}";
 
                 using (UnityWebRequest pollRequest = UnityWebRequest.Get(pollUrl))
                 {
-                    if (!string.IsNullOrEmpty(_session.StoredCookie))
+                    if (_session != null && !string.IsNullOrEmpty(_session.StoredCookie))
                     {
-                        Debug.Log($"[Completions] Sending Cookie: {_session.StoredCookie}");
                         pollRequest.SetRequestHeader("Cookie", _session.StoredCookie);
                     }
                     
-                    yield return pollRequest.SendWebRequest();
+                    var operation = pollRequest.SendWebRequest();
+                    while (!operation.isDone)
+                    {
+                        await Task.Yield();
+                    }
 
                     if (pollRequest.result != UnityWebRequest.Result.Success)
                     {
@@ -153,17 +159,22 @@ namespace Donkey
 
                     QueueResponse pollResponse = JsonUtility.FromJson<QueueResponse>(pollRequest.downloadHandler.text);
 
+                    if (pollResponse == null)
+                    {
+                        continue;
+                    }
+
                     // Check status return values
                     if (pollResponse.status == "completed")
                     {
                         string finalMessage = pollResponse.choices?[0]?.message?.content ?? "No content.";
                         onSuccess?.Invoke(finalMessage);
-                        yield break;
+                        return;
                     }
                     else if (pollResponse.status == "failed")
                     {
                         onError?.Invoke("Job processing failed on the backend worker.");
-                        yield break;
+                        return;
                     }
 
                     Debug.Log($"[ChatGPTQueue] Job {queueId} status: '{pollResponse.status}'. Retrying in {_pollInterval}s...");

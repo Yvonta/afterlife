@@ -10,10 +10,13 @@ using Yvonta.UI;
 public class Main : MonoBehaviour
 {
     [Header("Server Endpoints")]
-    [SerializeField] private string jsonRpcUrl = "https://yvonta.ai/appapi/v2/xbot.php";
-    [SerializeField] private string avatarGenUrl = "https://yvonta.ai/appapi/v2/avatargen.php";
-    [SerializeField] private string clothingUrl = "https://yvonta.ai/appapi/v2/clothing.php";
-    [SerializeField] private string hairUrl = "https://yvonta.ai/appapi/v2/hair.php";
+    [SerializeField] private string jsonRpcUrl = "https://ultireal.com/appapi/v2/xbot.php";
+    [SerializeField] private string avatarGenUrl = "https://ultireal.com/appapi/v2/avatargen.php";
+    [SerializeField] private string clothingUrl = "https://ultireal.com/appapi/v2/clothing.php";
+    [SerializeField] private string hairUrl = "https://ultireal.com/appapi/v2/hair.php";
+    [SerializeField] private string completionUrl = "https://ultireal.com/appapi/v2/completions.php";
+    [SerializeField] private string statusUrl = "https://ultireal.com/appapi/v2/status.php";
+    [SerializeField] private string sttUrl = "https://ultireal.com/appapi/v2/stt.php";
 
     [Header("UI References")]
     [SerializeField] private UILogin uiLogin;
@@ -33,9 +36,100 @@ public class Main : MonoBehaviour
     private DonkeyAvatar _player;    
     private DonkeyAvatar _npc1;
     private DonkeyAvatar _npc2;
-    
+
+    private DonkeySession session;
+    private AudioMic audioMic;
+
+    private void Update()
+    {
+        // Delegate frame update to AudioMic instance safely
+        audioMic?.Update();
+    }
+
+    private void HandleWavData(AudioClip myAudioClip)
+    {
+        // FIXED: Replaced non-existent 'wavBytes' with properties from 'myAudioClip'
+        Debug.Log($"Received AudioClip '{myAudioClip.name}' (Length: {myAudioClip.length:F2}s, Frequency: {myAudioClip.frequency}Hz) via callback.");
+
+        // FIXED: Updated domain endpoint to match server endpoints
+        DonkeySTT client = new DonkeySTT(
+            apiUrl: sttUrl,
+            defaultLanguage: "nl",
+            coroutineRunner: this,
+            session: session
+        );
+
+        // Send AudioClip for Speech-To-Text transcription
+        client.SendAudioClipForTranscription(
+            myAudioClip, 
+            onSuccess: (text) => {
+                Debug.Log($"Transcribed: {text}");
+                if (!string.IsNullOrEmpty(completionUrl) && !string.IsNullOrEmpty(statusUrl))
+                {
+                    try
+                    {
+                     
+                     
+
+// Get or automatically attach DonkeyTTSStreaming component
+DonkeyTTSStreaming ttsStreamer = GetComponent<DonkeyTTSStreaming>();
+if (ttsStreamer == null)
+{
+    ttsStreamer = gameObject.AddComponent<DonkeyTTSStreaming>();
+}
+
+// Configure pause times for sentences (e.g., 0.2s) and paragraphs (e.g., 0.6s)
+ttsStreamer.Initialize(session, pauseBetweenSentences: 0.2f, pauseBetweenParagraphs: 0.6f);
+
+// Get or automatically attach DonkeyGPTStreaming component
+DonkeyGPTStreaming gptStreamer = GetComponent<DonkeyGPTStreaming>();
+if (gptStreamer == null)
+{
+    gptStreamer = gameObject.AddComponent<DonkeyGPTStreaming>();
+}
+
+// Pass AddSentence delegate into RequestStream
+gptStreamer.RequestStream(
+    text, 
+    ttsStreamer.AddSentence,     
+    "https://ultireal.com/appapi/v2/gpt.php"
+);
+
+
+                     
+    /*                 
+                        DonkeyCompletions completions = new DonkeyCompletions(completionUrl, statusUrl, 1.0f, 15, session);
+
+                        completions.SendPrompt(text, 
+                            onSuccess: (response) => {
+                                Debug.Log("Response: " + (response ?? "Empty response"));
+                                
+                                // Get an existing component on this GameObject, or add one if it doesn't exist
+                                DonkeyTTS ttsStreamer = GetComponent<DonkeyTTS>();
+                                if (ttsStreamer == null)
+                                {
+                                    ttsStreamer = gameObject.AddComponent<DonkeyTTS>();
+                                }
+
+                                ttsStreamer.SynthesizeAndPlay(EmojiRemover.RemoveEmojis(response ?? "Empty response"));                
+                            },
+                            onError: (error) => Debug.LogError("Error: " + (error ?? "Unknown error"))
+                        );*/
+                    }
+                    catch (System.Exception ex)
+                    {
+                        Debug.LogError($"[DonkeyCompletions] Failed to send prompt: {ex.Message}");
+                    }
+                }
+            },
+            onError: (err) => Debug.LogError($"STT Error: {err}")
+        );
+    }
+
     private void Awake()
     {
+        SubtitleManager.Initialize();
+
         GameObject canvasObj = GameObject.Find("GeneratedCanvas");
         if (canvasObj == null)
         {
@@ -68,6 +162,14 @@ public class Main : MonoBehaviour
 
         if (uiLogin != null) uiLogin.SetVisible(true);
         if (uiRegister != null) uiRegister.SetVisible(false);
+
+        // Initialize AudioMic in Awake to prevent null errors in Update before Start finishes
+        audioMic = new AudioMic(
+            deviceName: null, 
+            sampleRate: 44100, 
+            maxRecordingLengthSeconds: 120, 
+            onAudioRecorded: HandleWavData
+        );
     }
 
     private async void Start()
@@ -79,7 +181,7 @@ public class Main : MonoBehaviour
             uiLogin.SetStatusMessage("Checking existing session...");
         }
 
-        DonkeySession session = new DonkeySession(jsonRpcUrl);
+        this.session = new DonkeySession(jsonRpcUrl);
 
         if (!string.IsNullOrEmpty(session.StoredCookie))
         {
@@ -204,7 +306,6 @@ public class Main : MonoBehaviour
     {
         _player = await LoadAndInitializeAvatar(session, 0f, 0f, 0f, gender, faceImagePath, clothingName, hairName, Vector3.zero);
         _npc1 = await LoadAndInitializeAvatar(session, -0.5f, 0f, 0f, 1f, "/home/dirkjan/2.jpg", "punkduck_wetsuit", "cortu_straight_bangs", Vector3.zero);
-        // Specifieke hoogte-offset toegevoegd voor _npc2 zodat het pak en haar op de juiste hoogte aansluiten
         _npc2 = await LoadAndInitializeAvatar(session, 0.5f, 0f, 0f, 1f, "/home/dirkjan/2.jpg", "toigo_female_suit_2", "punkduck_alpha7_curly", new Vector3(0f, 0.0f, 0f));
     }
 
@@ -277,7 +378,6 @@ public class Main : MonoBehaviour
                     foreach (var accSmr in accSmrs)
                     {
                         accSmr.transform.SetParent(avatarObject.transform, true);
-                        // Pas de optionele offset toe zodat afwijkende modellen netjes uitlijnen
                         accSmr.transform.localPosition = accessoryPositionOffset;
                         accSmr.transform.localRotation = Quaternion.identity;
                         accSmr.transform.localScale = Vector3.one;
@@ -324,7 +424,10 @@ public class Main : MonoBehaviour
                         mr.transform.localScale = Vector3.one;
                     }
 
-                    Destroy(tempAccObj);
+                    if (tempAccObj != null)
+                    {
+                        Destroy(tempAccObj);
+                    }
                 }
             }
 
