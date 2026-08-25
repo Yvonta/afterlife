@@ -24,8 +24,6 @@ namespace Donkey
 
         private DonkeySession session;
 
-        private string subtitleText = "";
-
         public void Initialize(DonkeySession session)
         {
             this.session = session;
