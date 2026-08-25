@@ -23,7 +23,7 @@ public class Main : MonoBehaviour
     [SerializeField] private UIRegister uiRegister;
 
     [Header("Avatar Generation Parameters")]
-    [SerializeField] private string faceImagePath; 
+    [SerializeField] private string faceImagePath = "Assets/Faces/dirkjan.jpg"; 
     [SerializeField] private float gender = 1.0f;
     [SerializeField] private float age = 0.8f;
     [SerializeField] private float weight = 0.2f;
@@ -305,8 +305,8 @@ gptStreamer.RequestStream(
     private async Task RunAvatarWorkflow(DonkeySession session)
     {
         _player = await LoadAndInitializeAvatar(session, 0f, 0f, 0f, gender, faceImagePath, clothingName, hairName, Vector3.zero);
-        _npc1 = await LoadAndInitializeAvatar(session, -0.5f, 0f, 0f, 1f, "/home/dirkjan/2.jpg", "punkduck_wetsuit", "cortu_straight_bangs", Vector3.zero);
-        _npc2 = await LoadAndInitializeAvatar(session, 0.5f, 0f, 0f, 1f, "/home/dirkjan/2.jpg", "toigo_female_suit_2", "punkduck_alpha7_curly", new Vector3(0f, 0.0f, 0f));
+        _npc1 = await LoadAndInitializeAvatar(session, -0.5f, 0f, 0f, 1f, "Assets/Faces/dirkjan.jpg", "punkduck_wetsuit", "cortu_straight_bangs", Vector3.zero);
+        _npc2 = await LoadAndInitializeAvatar(session, 0.5f, 0f, 0f, 1f, "Assets/Faces/dirkjan.jpg", "toigo_female_suit_2", "punkduck_alpha7_curly", new Vector3(0f, 0.0f, 0f));
     }
 
     private async Task<DonkeyAvatar> LoadAndInitializeAvatar(DonkeySession session, float x, float y, float z, float avatarGender, string avatarFaceImagePath, string targetClothing, string targetHair, Vector3 accessoryPositionOffset)
