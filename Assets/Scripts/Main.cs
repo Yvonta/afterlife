@@ -31,7 +31,6 @@ public class Main : MonoBehaviour
     [Header("Customization Assets")]
     [SerializeField] private string clothingName = "green_tomato_rei_ayanami";
     [SerializeField] private string hairName = "o4saken_long01";
-    [SerializeField] private string animationPath = "1.bvh";
 
     private DonkeyAvatar _player;    
     private DonkeyAvatar _npc1;
@@ -53,7 +52,7 @@ public class Main : MonoBehaviour
 
         // FIXED: Updated domain endpoint to match server endpoints
         DonkeySTT client = new DonkeySTT(
-            session,
+            session, 
             sttUrl,
             "nl",
             "audio/wav",
@@ -285,8 +284,6 @@ public class Main : MonoBehaviour
     private async Task RunAvatarWorkflow(DonkeySession session)
     {
         _player = await LoadAndInitializeAvatar(session, 0f, 0f, 0f, gender, faceImagePath, clothingName, hairName, Vector3.zero);
-        _npc1 = await LoadAndInitializeAvatar(session, -0.5f, 0f, 0f, 1f, "Assets/Faces/dirkjan.jpg", "punkduck_wetsuit", "cortu_straight_bangs", Vector3.zero);
-        _npc2 = await LoadAndInitializeAvatar(session, 0.5f, 0f, 0f, 1f, "Assets/Faces/dirkjan.jpg", "toigo_female_suit_2", "punkduck_alpha7_curly", new Vector3(0f, 0.0f, 0f));
     }
 
     private async Task<DonkeyAvatar> LoadAndInitializeAvatar(DonkeySession session, float x, float y, float z, float avatarGender, string avatarFaceImagePath, string targetClothing, string targetHair, Vector3 accessoryPositionOffset)
