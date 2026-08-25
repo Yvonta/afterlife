@@ -7,11 +7,11 @@ using UnityEngine.Networking;
 
 namespace Donkey
 {
-    public class DonkeyGPTStreaming : MonoBehaviour
+    public class DonkeyLLMStreaming : MonoBehaviour
     {
         public delegate void SentenceReceivedHandler(string sentence);
 
-        [SerializeField] private string defaultApiUrl = "https://ultireal.com/appapi/v2/gpt.php";
+        [SerializeField] private string defaultApiUrl = "https://ultireal.com/appapi/v2/llm.php";
         private StringBuilder buffer = new StringBuilder();
 
         public void RequestStream(string prompt, SentenceReceivedHandler onSentenceReady)

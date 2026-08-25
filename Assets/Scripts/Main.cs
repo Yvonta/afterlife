@@ -14,9 +14,9 @@ public class Main : MonoBehaviour
     [SerializeField] private string avatarGenUrl = "https://ultireal.com/appapi/v2/avatargen.php";
     [SerializeField] private string clothingUrl = "https://ultireal.com/appapi/v2/clothing.php";
     [SerializeField] private string hairUrl = "https://ultireal.com/appapi/v2/hair.php";
-    [SerializeField] private string completionUrl = "https://ultireal.com/appapi/v2/completions.php";
-    [SerializeField] private string statusUrl = "https://ultireal.com/appapi/v2/status.php";
     [SerializeField] private string sttUrl = "https://ultireal.com/appapi/v2/stt.php";
+    [SerializeField] private string ttsUrl = "https://ultireal.com/appapi/v2/tts.php";
+    [SerializeField] private string llmUrl = "https://ultireal.com/appapi/v2/llm.php";
 
     [Header("UI References")]
     [SerializeField] private UILogin uiLogin;
@@ -53,10 +53,12 @@ public class Main : MonoBehaviour
 
         // FIXED: Updated domain endpoint to match server endpoints
         DonkeySTT client = new DonkeySTT(
-            apiUrl: sttUrl,
-            defaultLanguage: "nl",
-            coroutineRunner: this,
-            session: session
+            session,
+            sttUrl,
+            "nl",
+            "audio/wav",
+            280,
+            this
         );
 
         // Send AudioClip for Speech-To-Text transcription
@@ -64,57 +66,35 @@ public class Main : MonoBehaviour
             myAudioClip, 
             onSuccess: (text) => {
                 Debug.Log($"Transcribed: {text}");
-                if (!string.IsNullOrEmpty(completionUrl) && !string.IsNullOrEmpty(statusUrl))
+                if (!string.IsNullOrEmpty(llmUrl))
                 {
                     try
                     {
-                     
-                     
+                        // Get or automatically attach DonkeyTTSStreaming component
+                        DonkeyLLMStreaming llmStreamer = GetComponent<DonkeyLLMStreaming>();
+                        if (llmStreamer == null)
+                        {
+                            llmStreamer = gameObject.AddComponent<DonkeyLLMStreaming>();
+                        }
 
-// Get or automatically attach DonkeyTTSStreaming component
-DonkeyTTSStreaming ttsStreamer = GetComponent<DonkeyTTSStreaming>();
-if (ttsStreamer == null)
-{
-    ttsStreamer = gameObject.AddComponent<DonkeyTTSStreaming>();
-}
+                        // Configure pause times for sentences (e.g., 0.2s) and paragraphs (e.g., 0.6s)
+                        
+                        DonkeyTTSStreaming ttsStreamer = GetComponent<DonkeyTTSStreaming>();
+                        if (ttsStreamer == null)
+                        {
+                            ttsStreamer = gameObject.AddComponent<DonkeyTTSStreaming>();
+                        }
+                        
+                        
+                        ttsStreamer.Initialize(session, pauseBetweenSentences: 0.2f, pauseBetweenParagraphs: 0.6f);
 
-// Configure pause times for sentences (e.g., 0.2s) and paragraphs (e.g., 0.6s)
-ttsStreamer.Initialize(session, pauseBetweenSentences: 0.2f, pauseBetweenParagraphs: 0.6f);
+                        // Pass AddSentence delegate into RequestStream
+                        llmStreamer.RequestStream(
+                            text, 
+                            ttsStreamer.AddSentence,     
+                            llmUrl
+                        );
 
-// Get or automatically attach DonkeyGPTStreaming component
-DonkeyGPTStreaming gptStreamer = GetComponent<DonkeyGPTStreaming>();
-if (gptStreamer == null)
-{
-    gptStreamer = gameObject.AddComponent<DonkeyGPTStreaming>();
-}
-
-// Pass AddSentence delegate into RequestStream
-gptStreamer.RequestStream(
-    text, 
-    ttsStreamer.AddSentence,     
-    "https://ultireal.com/appapi/v2/gpt.php"
-);
-
-
-                     
-    /*                 
-                        DonkeyCompletions completions = new DonkeyCompletions(completionUrl, statusUrl, 1.0f, 15, session);
-
-                        completions.SendPrompt(text, 
-                            onSuccess: (response) => {
-                                Debug.Log("Response: " + (response ?? "Empty response"));
-                                
-                                // Get an existing component on this GameObject, or add one if it doesn't exist
-                                DonkeyTTS ttsStreamer = GetComponent<DonkeyTTS>();
-                                if (ttsStreamer == null)
-                                {
-                                    ttsStreamer = gameObject.AddComponent<DonkeyTTS>();
-                                }
-
-                                ttsStreamer.SynthesizeAndPlay(EmojiRemover.RemoveEmojis(response ?? "Empty response"));                
-                            },
-                            onError: (error) => Debug.LogError("Error: " + (error ?? "Unknown error"))
-                        );*/
                     }
                     catch (System.Exception ex)
                     {
