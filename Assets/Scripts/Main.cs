@@ -51,11 +51,11 @@ public class Main : MonoBehaviour
         Debug.Log($"Received AudioClip '{myAudioClip.name}' (Length: {myAudioClip.length:F2}s, Frequency: {myAudioClip.frequency}Hz) via callback.");
 
         // FIXED: Updated domain endpoint to match server endpoints
-        DonkeySTT client = new DonkeySTT(
-            session, 
+        DonkeySTT client = new DonkeySTT( 
+            session,
             sttUrl,
-            "nl",
-            "audio/wav",
+            "auto",
+            "large",
             280,
             this
         );
