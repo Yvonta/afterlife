@@ -153,6 +153,8 @@ public class Main : MonoBehaviour
 
     private async void Start()
     {        
+        bool islogin = false;
+        
         if (uiLogin != null)
         {
             uiLogin.SetVisible(false);
@@ -167,10 +169,10 @@ public class Main : MonoBehaviour
             try
             {
                 Debug.Log("Validating existing session...");
-                await session.IsLoggedInAsync();
+                islogin = await session.IsLoggedInAsync();
                 Debug.Log("Session is valid! Running avatar workflow.");
 
-                if (uiLogin != null) uiLogin.SetVisible(false);
+                if (uiLogin != null) uiLogin.SetVisible(!islogin);
 
                 await RunAvatarWorkflow(session);
                 return;
@@ -184,8 +186,8 @@ public class Main : MonoBehaviour
 
         if (uiLogin != null)
         {
-            uiLogin.SetVisible(true);
-            uiLogin.SetInteractable(true);
+            uiLogin.SetVisible(!islogin);
+            uiLogin.SetInteractable(!islogin);
             uiLogin.SetStatusMessage("Please log in.");
         }
     }

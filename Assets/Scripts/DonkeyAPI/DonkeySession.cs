@@ -40,6 +40,22 @@ namespace Donkey
         public string error;
     }
 
+    [System.Serializable]
+    public class LoggedInResultData
+    {
+        public int code;
+        public string message;
+    }
+
+    [System.Serializable]
+    public class LoggedInResponseData
+    {
+        public string jsonrpc;
+        public int id;
+        public LoggedInResultData result;
+        public string error;
+    }
+
     public class DonkeySession
     {
 	private readonly string _serverUrl;
@@ -96,7 +112,7 @@ namespace Donkey
             }
         }
 
-        public async Task<string> IsLoggedInAsync()
+        public async Task<bool> IsLoggedInAsync()
         {
             int requestId = ++_idCounter;
             string jsonBody = BuildIsLoggedInPayload(requestId);
@@ -108,16 +124,16 @@ namespace Donkey
                 www.downloadHandler = new DownloadHandlerBuffer();
                 www.SetRequestHeader("Content-Type", "application/json");
 
-		//if (!string.IsNullOrEmpty(_storedSessionId))
-		//{
-		//    www.SetRequestHeader("Cookie", $"SESSION={_storedSessionId}");
-		//    Debug.Log($"Sending Cookie: SESSION={_storedSessionId}");
-		//}
+                if (!string.IsNullOrEmpty(_storedSessionId))
+                {
+                    www.SetRequestHeader("Cookie", $"SESSION={_storedSessionId}");
+                    Debug.Log($"Sending Cookie: SESSION={_storedSessionId}");
+                }
 
                 var operation = www.SendWebRequest();
                 while (!operation.isDone) await Task.Yield();
 
-                if (www.result != UnityWebRequest.Result.Success)
+                if(www.result != UnityWebRequest.Result.Success)
                 {
                     throw new Exception($"IsLoggedIn Network Error: {www.error} | Response: {www.downloadHandler.text}");
                 }
@@ -131,7 +147,9 @@ namespace Donkey
                 string responseString = www.downloadHandler.text;
                 Debug.Log($"[IsLoggedIn] Server Response: {responseString}");
 
-                return ParseResponse(responseString);
+                LoggedInResponseData jsobj = JsonUtility.FromJson<LoggedInResponseData>(responseString);
+
+                return jsobj.result.code == 0;
             }
         }
 

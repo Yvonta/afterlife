@@ -26,7 +26,7 @@ public class AudioMic
     /// <param name="onAudioRecorded">Optional callback for processed AudioClip.</param>
     public AudioMic(
         string deviceName = null, 
-        int sampleRate = 44100, 
+        int sampleRate = 24000, 
         int maxRecordingLengthSeconds = 300, 
         Action<AudioClip> onAudioRecorded = null)
     {
