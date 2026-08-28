@@ -544,18 +544,18 @@ MonoBehaviour:
   avatarGenUrl: https://ultireal.com/appapi/v2/avatargen.php
   clothingUrl: https://ultireal.com/appapi/v2/clothing.php
   hairUrl: https://ultireal.com/appapi/v2/hair.php
-  completionUrl: https://ultireal.com/appapi/v2/completions.php
-  statusUrl: https://ultireal.com/appapi/v2/status.php
   sttUrl: https://ultireal.com/appapi/v2/stt.php
+  ttsUrl: https://ultireal.com/appapi/v2/tts.php
+  llmUrl: https://ultireal.com/appapi/v2/llm.php
+  voiceCloningUrl: https://ultireal.com/appapi/v2/voicecloning.php
   uiLogin: {fileID: 0}
   uiRegister: {fileID: 0}
-  faceImagePath: /Users/dirkjan/1.jpg
-  gender: 0
+  faceImagePath: Assets/Faces/dirkjan.jpg
+  gender: 1
   age: 0.8
   weight: 0.2
-  clothingName: toigo_male_suit_3
-  hairName: cortu_short_messy_hair
-  animationPath: /home/dirkjan/Documents/anaimationfiles/cmuconvert-mb2-01-09/01/01_01.bvh
+  clothingName: green_tomato_rei_ayanami
+  hairName: o4saken_long01
 --- !u!4 &1732794298
 Transform:
   m_ObjectHideFlags: 0
