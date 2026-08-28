@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -17,6 +18,7 @@ public class Main : MonoBehaviour
     [SerializeField] private string sttUrl = "https://ultireal.com/appapi/v2/stt.php";
     [SerializeField] private string ttsUrl = "https://ultireal.com/appapi/v2/tts.php";
     [SerializeField] private string llmUrl = "https://ultireal.com/appapi/v2/llm.php";
+    [SerializeField] private string voiceCloningUrl = "https://ultireal.com/appapi/v2/voicecloning.php";
 
     [Header("UI References")]
     [SerializeField] private UILogin uiLogin;
@@ -39,6 +41,82 @@ public class Main : MonoBehaviour
     private DonkeySession session;
     private AudioMic audioMic;
 
+    private DonkeyTTSStreaming ttsStreamer;
+    private UiVoiceCloning uiVoiceCloning;
+
+    private void HandleAudioRecorded(byte[] audioData, string sentence, string voiceName)
+    {
+        // Hide the panel
+        if (uiVoiceCloning != null)
+        {
+            uiVoiceCloning.SetVisible(false);
+        }
+        
+        UploadAudioRoutine(audioData, sentence, voiceName);
+    }
+
+    private async void UploadAudioRoutine(byte[] audioData, string sentence, string voiceName)
+    {
+        if (audioData == null || audioData.Length == 0)
+        {
+            Debug.LogError("[Main] Audio data is empty, skipping upload.");
+            return;
+        }
+
+        if (session == null)
+        {
+            Debug.LogError("[Main] Active session is null! Make sure the user is logged in before uploading.");
+            if (uiVoiceCloning != null)
+            {
+                uiVoiceCloning.UpdateButtonText("Login Required");
+                uiVoiceCloning.SetRecordButtonInteractable(true);
+            }
+            return;
+        }
+
+        if (uiVoiceCloning != null)
+        {
+            uiVoiceCloning.UpdateButtonText("Uploading...");
+            uiVoiceCloning.SetRecordButtonInteractable(false);
+        }
+
+        try
+        {
+            Debug.Log($"[Main] Uploading voice clone for '{voiceName}' ({audioData.Length} bytes)...");
+
+            DonkeyVoiceCloning voiceclone = new DonkeyVoiceCloning();
+            voiceclone.Initialize(session, voiceCloningUrl);
+            
+            string response = await voiceclone.CloneVoiceAsync(
+                audioBytes: audioData,
+                mimeType: "audio/wav",
+                voiceName: voiceName,
+                languageCode: "en"
+            );
+
+            if (!string.IsNullOrEmpty(response))
+            {
+                Debug.Log($"[Main] Voice Clone Response: {response}");
+            }
+
+            ttsStreamer.SetVoice(voiceName);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"[Main] Voice cloning upload failed: {ex.Message}\n{ex.StackTrace}");
+        }
+        finally
+        {
+            await Task.Delay(2000); 
+
+            if (uiVoiceCloning != null)
+            {
+                uiVoiceCloning.UpdateButtonText("Start Recording");
+                uiVoiceCloning.SetRecordButtonInteractable(true);
+            }
+        }
+    }
+
     private void Update()
     {
         // Delegate frame update to AudioMic instance safely
@@ -47,10 +125,8 @@ public class Main : MonoBehaviour
 
     private void HandleWavData(AudioClip myAudioClip)
     {
-        // FIXED: Replaced non-existent 'wavBytes' with properties from 'myAudioClip'
         Debug.Log($"Received AudioClip '{myAudioClip.name}' (Length: {myAudioClip.length:F2}s, Frequency: {myAudioClip.frequency}Hz) via callback.");
 
-        // FIXED: Updated domain endpoint to match server endpoints
         DonkeySTT client = new DonkeySTT( 
             session,
             sttUrl,
@@ -64,6 +140,7 @@ public class Main : MonoBehaviour
         client.SendAudioClipForTranscription(
             myAudioClip, 
             onSuccess: (text) => {
+                        
                 Debug.Log($"Transcribed: {text}");
                 if (!string.IsNullOrEmpty(llmUrl))
                 {
@@ -76,14 +153,6 @@ public class Main : MonoBehaviour
                             llmStreamer = gameObject.AddComponent<DonkeyLLMStreaming>();
                         }
 
-                        // Configure pause times for sentences (e.g., 0.2s) and paragraphs (e.g., 0.6s)
-                        
-                        DonkeyTTSStreaming ttsStreamer = GetComponent<DonkeyTTSStreaming>();
-                        if (ttsStreamer == null)
-                        {
-                            ttsStreamer = gameObject.AddComponent<DonkeyTTSStreaming>();
-                        }
-                        
                         
                         ttsStreamer.Initialize(session, pauseBetweenSentences: 0.2f, pauseBetweenParagraphs: 0.6f);
 
@@ -107,8 +176,23 @@ public class Main : MonoBehaviour
 
     private void Awake()
     {
+        
+        ttsStreamer = GetComponent<DonkeyTTSStreaming>();
+        if (ttsStreamer == null)
+        {
+            ttsStreamer = gameObject.AddComponent<DonkeyTTSStreaming>();
+        }
+        
+        // 1. Get or add the component to this GameObject
+        uiVoiceCloning = GetComponent<UiVoiceCloning>();
+        if (uiVoiceCloning == null)
+        {
+            uiVoiceCloning = gameObject.AddComponent<UiVoiceCloning>();
+        }
+
         SubtitleManager.Initialize();
 
+        // 2. Locate or create Canvas
         GameObject canvasObj = GameObject.Find("GeneratedCanvas");
         if (canvasObj == null)
         {
@@ -119,6 +203,7 @@ public class Main : MonoBehaviour
             canvasObj.AddComponent<GraphicRaycaster>();
         }
 
+        // 3. Initialize Login & Register UI
         if (uiLogin == null)
         {
             uiLogin = canvasObj.GetComponent<UILogin>();
@@ -139,10 +224,16 @@ public class Main : MonoBehaviour
             }
         }
 
+        // 4. Build and initial setup for Voice Cloning UI
+        uiVoiceCloning.BuildUI(canvasObj.transform); 
+
+        // Hide it by default until the user is logged in
+        uiVoiceCloning.SetVisible(false);
+
         if (uiLogin != null) uiLogin.SetVisible(true);
         if (uiRegister != null) uiRegister.SetVisible(false);
 
-        // Initialize AudioMic in Awake to prevent null errors in Update before Start finishes
+        // Initialize AudioMic
         audioMic = new AudioMic(
             deviceName: null, 
             sampleRate: 44100, 
@@ -194,6 +285,12 @@ public class Main : MonoBehaviour
 
     private void OnEnable()
     {
+        if (uiVoiceCloning != null)
+        {
+            uiVoiceCloning.OnAudioRecorded += HandleAudioRecorded;
+        }
+
+
         if (uiLogin != null)
         {
             uiLogin.OnLoginSubmitted.AddListener(HandleLoginSubmitted);
@@ -209,6 +306,11 @@ public class Main : MonoBehaviour
 
     private void OnDisable()
     {
+        if (uiVoiceCloning != null)
+        {
+            uiVoiceCloning.OnAudioRecorded -= HandleAudioRecorded;
+        }
+
         if (uiLogin != null)
         {
             uiLogin.OnLoginSubmitted.RemoveListener(HandleLoginSubmitted);
@@ -238,11 +340,11 @@ public class Main : MonoBehaviour
     {
         Debug.Log($"Register submitted for: {email}, Name: {name}");
 
-        DonkeySession session = new DonkeySession(jsonRpcUrl);
+        DonkeySession newSession = new DonkeySession(jsonRpcUrl);
 
         try
         {
-            await session.RegisterAsync(email, password, name, genderInput, ageInput);
+            await newSession.RegisterAsync(email, password, name, genderInput, ageInput);
             uiRegister.SetVisible(false);
         }
         catch (System.Exception ex)
@@ -259,24 +361,27 @@ public class Main : MonoBehaviour
             uiLogin.SetStatusMessage("Logging in via JSON-RPC...");
         }
 
-        DonkeySession session = new DonkeySession(jsonRpcUrl);
+        if (this.session == null)
+        {
+            this.session = new DonkeySession(jsonRpcUrl);
+        }
 
         try
         {
             Debug.Log("Logging in via JSON-RPC...");
-            await session.LoginAsync(email, password);
+            await this.session.LoginAsync(email, password);
             Debug.Log("Login successful! Session stored.");
 
-            uiLogin.SetVisible(false);
+            if (uiLogin != null) uiLogin.SetVisible(false);
 
-            await RunAvatarWorkflow(session);
+            await RunAvatarWorkflow(this.session);
         }
         catch (System.Exception ex)
         {
             Debug.LogError($"An error occurred during the Donkey workflow: {ex.Message}");
-            uiLogin.SetVisible(true);
             if (uiLogin != null)
             {
+                uiLogin.SetVisible(true);
                 uiLogin.SetStatusMessage($"Error: {ex.Message}");
                 uiLogin.SetInteractable(true);
             }
@@ -285,7 +390,22 @@ public class Main : MonoBehaviour
 
     private async Task RunAvatarWorkflow(DonkeySession session)
     {
-        _player = await LoadAndInitializeAvatar(session, 0f, 0f, 0f, gender, faceImagePath, clothingName, hairName, Vector3.zero);
+        // Enable and show the Voice Cloning UI after login/session is validated
+        if (uiVoiceCloning != null)
+        {
+            uiVoiceCloning.gameObject.SetActive(true);
+            uiVoiceCloning.SetVisible(true); 
+        }
+
+        _player = await LoadAndInitializeAvatar(
+            session, 
+            0f, 0f, 0f, 
+            gender, 
+            faceImagePath, 
+            clothingName, 
+            hairName, 
+            Vector3.zero
+        );
     }
 
     private async Task<DonkeyAvatar> LoadAndInitializeAvatar(DonkeySession session, float x, float y, float z, float avatarGender, string avatarFaceImagePath, string targetClothing, string targetHair, Vector3 accessoryPositionOffset)
@@ -423,7 +543,7 @@ public class Main : MonoBehaviour
 
         if (avatarObject != null)
         {
-            Debug.Log($"[Main] Avatar '{avatarObject.name}' succesvol geladen op ({x}, {y}, {z}).");
+            Debug.Log($"[Main] Avatar '{avatarObject.name}' successfully loaded at ({x}, {y}, {z}).");
         }
 
         if (uiLogin != null)

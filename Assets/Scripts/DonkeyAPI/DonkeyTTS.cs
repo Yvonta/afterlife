@@ -8,8 +8,9 @@ namespace Donkey
 {
     public class DonkeyTTS : MonoBehaviour
     {
-        [SerializeField] private string serverUrl = "https://ultireal.com/appapi/v2/tts.php";
-        [SerializeField] private string voiceFilePath = "Assets/Voices/yvonta.mp3";
+        string serverUrl = "https://ultireal.com/appapi/v2/tts.php";
+        
+        private string voice = "Kees";
 
         private AudioSource audioSource;
         private Queue<AudioClip> playQueue = new Queue<AudioClip>();
@@ -27,6 +28,11 @@ namespace Donkey
         public void Initialize(DonkeySession session)
         {
             this.session = session;
+        }
+
+        public void SetVoice(string voice)
+        {
+            this.voice = voice;
         }
 
         private void Awake()
@@ -51,25 +57,14 @@ namespace Donkey
         {
             isDownloading = true;
 
-            byte[] fileBytes = System.Array.Empty<byte>();
-            if (File.Exists(voiceFilePath))
-            {
-                fileBytes = File.ReadAllBytes(voiceFilePath);
-            }
-            else
-            {
-                Debug.LogWarning($"[DonkeyTTS] Voice file not found at: {voiceFilePath}");
-            }
+            WWWForm form = new WWWForm();
 
-            List<IMultipartFormSection> formData = new List<IMultipartFormSection>
-            {
-                new MultipartFormDataSection("text", text.Replace(".", "").Replace("?", "")),
-                new MultipartFormDataSection("format", "mp3"),
-                new MultipartFormDataSection("language_id", language),           
-                new MultipartFormFileSection("voice_file", fileBytes, "voice.mp3", "audio/mpeg")
-            };
+            form.AddField("text", text.Replace(".", "").Replace("?", ""));
+            form.AddField("format", "mp3");
+            form.AddField("language_id", language);
+            form.AddField("voice", voice);
 
-            using (UnityWebRequest www = UnityWebRequest.Post(serverUrl, formData))
+            using (UnityWebRequest www = UnityWebRequest.Post(serverUrl, form))
             {
                 DownloadHandlerAudioClip dh = new DownloadHandlerAudioClip(string.Empty, AudioType.MPEG);
                 dh.streamAudio = false;

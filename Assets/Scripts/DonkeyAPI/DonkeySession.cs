@@ -71,6 +71,79 @@ namespace Donkey
             LoadSessionFromDisk();
         }
 
+public async Task<string> LoginAsync(string email, string password)
+{
+    int requestId = ++DonkeySession._idCounter;
+    string jsonBody = BuildLoginPayload(email, password, requestId);
+
+    using (UnityWebRequest www = new UnityWebRequest(_serverUrl, "POST"))
+    {
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
+        www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        www.downloadHandler = new DownloadHandlerBuffer();
+        www.SetRequestHeader("Content-Type", "application/json");
+
+        var operation = www.SendWebRequest();
+        while (!operation.isDone) await Task.Yield();
+
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            throw new Exception($"Login Network Error: {www.error} | Response: {www.downloadHandler.text}");
+        }
+
+        string responseString = www.downloadHandler.text;
+        Debug.Log($"[Login] Server Response: {responseString}");
+        
+        string jsonResponse = ParseResponse(responseString);
+        _response = JsonUtility.FromJson<DonkeyJsonRpcResponse>(jsonResponse);
+
+        // FIX: Update local in-memory session variable
+        if (_response?.result?.data?.sessionid != null)
+        {
+            _storedSessionId = _response.result.data.sessionid;
+            DonkeySessionSave.SaveSession(_storedSessionId);
+        }
+
+        return jsonResponse;    
+    }
+}
+
+public async Task<bool> IsLoggedInAsync()
+{
+    int requestId = ++_idCounter;
+    string jsonBody = BuildIsLoggedInPayload(requestId);
+
+    using (UnityWebRequest www = new UnityWebRequest(_serverUrl, "POST"))
+    {
+        byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
+        www.uploadHandler = new UploadHandlerRaw(bodyRaw);
+        www.downloadHandler = new DownloadHandlerBuffer();
+        www.SetRequestHeader("Content-Type", "application/json");
+
+        if (!string.IsNullOrEmpty(_storedSessionId))
+        {
+            www.SetRequestHeader("Cookie", $"SESSION={_storedSessionId}");
+            Debug.Log($"Sending Cookie: SESSION={_storedSessionId}");
+        }
+
+        var operation = www.SendWebRequest();
+        while (!operation.isDone) await Task.Yield();
+
+        if (www.result != UnityWebRequest.Result.Success)
+        {
+            throw new Exception($"IsLoggedIn Network Error: {www.error} | Response: {www.downloadHandler.text}");
+        }
+
+        string responseString = www.downloadHandler.text;
+        Debug.Log($"[IsLoggedIn] Server Response: {responseString}");
+
+        LoggedInResponseData jsobj = JsonUtility.FromJson<LoggedInResponseData>(responseString);
+
+        // FIX: Safe navigation to avoid NullReferenceException on error responses
+        return jsobj != null && jsobj.result != null && jsobj.result.code == 0;
+    }
+}
+/*
         public async Task<string> LoginAsync(string email, string password)
         {
             int requestId = ++DonkeySession._idCounter;
@@ -152,7 +225,7 @@ namespace Donkey
                 return jsobj.result.code == 0;
             }
         }
-
+*/
         public void ClearSession()
         {
             _storedSessionId = null;

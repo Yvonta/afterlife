@@ -38,6 +38,14 @@ namespace Donkey
             }
         }
 
+        public void SetVoice(string voice)
+        {
+            if (donkeyTTS != null)
+            {
+                donkeyTTS.SetVoice(voice);
+            }
+        }
+
         public void Initialize(DonkeySession session, float pauseBetweenSentences = 0.2f, float pauseBetweenParagraphs = 0.6f)
         {
             this.pauseBetweenSentences = pauseBetweenSentences;
